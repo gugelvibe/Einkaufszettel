@@ -1,8 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/shopping_provider.dart';
-// import 'models/shopping_models.dart';
+import 'models/shopping_models.dart';
 
 void main() {
   runApp(
@@ -63,7 +64,7 @@ class _MainScreenState extends State<MainScreen> {
               .toList() ??
           [];
       setState(() {
-        _suggestions = provider.itemHistory
+        _suggestions = provider.currentHistory
             .where(
               (item) =>
                   item.toLowerCase().contains(text) &&
@@ -88,8 +89,9 @@ class _MainScreenState extends State<MainScreen> {
     final provider = context.read<ShoppingProvider>();
 
     if (name.isNotEmpty) {
-      if (provider.isInputDisabled) {
-        final inHistory = provider.itemHistory.any(
+      if (provider.currentList?.isInputDisabled ?? false) {
+        final history = provider.currentHistory;
+        final inHistory = history.any(
           (h) => h.trim().toLowerCase() == name.toLowerCase(),
         );
         if (!inHistory) {
@@ -140,38 +142,87 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _showRenameListDialog() {
+    final provider = context.read<ShoppingProvider>();
+    final currentList = provider.currentList;
+    if (currentList == null) return;
+
+    final TextEditingController nameController = TextEditingController(
+      text: currentList.name,
+    );
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Einkaufsliste umbenennen'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: CupertinoTextField(
+            controller: nameController,
+            placeholder: 'Name der Liste',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                provider.updateListName(name);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showColorPickerDialog() {
+    final provider = context.read<ShoppingProvider>();
+    final colors = [
+      {'name': 'Himmelblau', 'hex': 'E3F2FD'},
+      {'name': 'Zartrosa', 'hex': 'FCE4EC'},
+      {'name': 'Mintgrün', 'hex': 'E8F5E9'},
+      {'name': 'Zitronengelb', 'hex': 'FFF9C4'},
+      {'name': 'Lavendel', 'hex': 'F3E5F5'},
+      {'name': 'Papayanet', 'hex': 'FBE9E7'},
+    ];
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Hintergrundfarbe wählen'),
+        actions: colors.map((c) {
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              provider.updateListColor(c['hex']);
+              Navigator.pop(context);
+            },
+            child: Text(c['name']!),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+      ),
+    );
+  }
+
   void _showActionSheet(BuildContext context) {
     final provider = context.read<ShoppingProvider>();
+    final currentList = provider.currentList;
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => CupertinoActionSheet(
         title: const Text('Einstellungen'),
         actions: <CupertinoActionSheetAction>[
-          ...provider.lists.asMap().entries.map((entry) {
-            final index = entry.key;
-            final list = entry.value;
-            final isCurrent = list.id == provider.currentList?.id;
-            return CupertinoActionSheetAction(
-              onPressed: () {
-                provider.switchList(index);
-                Navigator.pop(context);
-              },
-              child: Text(
-                list.name,
-                style: TextStyle(
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                  color: isCurrent ? CupertinoColors.activeBlue : null,
-                ),
-              ),
-            );
-          }),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _showNewListDialog();
-            },
-            child: const Text('Zusätzliche Einkaufsliste'),
-          ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
             onPressed: () {
@@ -182,20 +233,53 @@ class _MainScreenState extends State<MainScreen> {
           ),
           CupertinoActionSheetAction(
             onPressed: () {
-              context.read<ShoppingProvider>().toggleInputMode();
+              Navigator.pop(context);
+              _showRenameListDialog();
+            },
+            child: const Text('Liste umbenennen'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showColorPickerDialog();
+            },
+            child: const Text('Farbe ändern'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              provider.toggleInputMode();
               Navigator.pop(context);
             },
             child: Text(
-              context.read<ShoppingProvider>().isInputDisabled
+              currentList?.isInputDisabled ?? false
                   ? 'Eingabemodus aktivieren'
-                  : 'Auswahlmodus',
+                  : 'Auswahlmodus aktivieren',
             ),
           ),
+          if (currentList?.isInputDisabled ?? false)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                provider.toggleHistoryScope();
+                Navigator.pop(context);
+              },
+              child: Text(
+                currentList?.useGlobalHistory ?? true
+                    ? 'Nur Begriffe dieser Liste'
+                    : 'Alle Begriffe (global)',
+              ),
+            ),
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(context);
             },
             child: const Text('Teilen'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showNewListDialog();
+            },
+            child: const Text('Zusätzliche Einkaufsliste'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -214,121 +298,186 @@ class _MainScreenState extends State<MainScreen> {
     final provider = context.watch<ShoppingProvider>();
     final currentList = provider.currentList;
 
+    Color backgroundColor = const Color(0xFFE3F2FD);
+    if (currentList?.colorHex != null) {
+      try {
+        backgroundColor = Color(
+          int.parse('FF${currentList!.colorHex}', radix: 16),
+        );
+      } catch (_) {}
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(provider.canUndo ? Icons.undo : Icons.check),
-          onPressed: () {
-            if (provider.canUndo) {
-              provider.undoDeletion();
-            } else {
-              provider.removeCompletedItems();
-            }
-          },
-        ),
-        title: GestureDetector(
-          onTap: Theme.of(context).platform == TargetPlatform.macOS
-              ? () => _showActionSheet(context)
-              : null,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset('assets/app_icon.png', height: 28),
-              const SizedBox(width: 8),
-              Text(
-                currentList?.name ?? 'Einkaufszettel',
-                style: TextStyle(
-                  color: Theme.of(context).platform == TargetPlatform.macOS
-                      ? CupertinoColors.activeBlue
-                      : null,
+      backgroundColor: backgroundColor,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AppBar(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              elevation: 0,
+              leading: IconButton(
+                icon: Image.asset('assets/app_icon.png', height: 28),
+                onPressed: () => _showActionSheet(context),
+              ),
+              title: GestureDetector(
+                onTap: Theme.of(context).platform == TargetPlatform.macOS
+                    ? () => _showActionSheet(context)
+                    : null,
+                child: Text(
+                  currentList?.name ?? 'Einkaufszettel',
+                  style: TextStyle(
+                    color: Theme.of(context).platform == TargetPlatform.macOS
+                        ? CupertinoColors.activeBlue
+                        : Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
                 ),
               ),
-            ],
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: Icon(provider.canUndo ? Icons.undo : Icons.check),
+                  onPressed: () {
+                    if (provider.canUndo) {
+                      provider.undoDeletion();
+                    } else {
+                      provider.removeCompletedItems();
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_horiz),
-            onPressed: () => _showActionSheet(context),
+      ),
+      body: Stack(
+        children: [
+          // Liquid Background Blobs
+          Positioned(
+            top: -100,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.blue.withOpacity(0.3),
+                    Colors.blue.withOpacity(0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 100,
+            right: -50,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.pink.withOpacity(0.2),
+                    Colors.pink.withOpacity(0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 200,
+            right: 50,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.yellow.withOpacity(0.2),
+                    Colors.yellow.withOpacity(0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Main Content
+          GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity != null) {
+                if (details.primaryVelocity! < 0) {
+                  provider.nextList();
+                } else if (details.primaryVelocity! > 0) {
+                  provider.previousList();
+                }
+              }
+            },
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: currentList == null || currentList.items.isEmpty
+                        ? const Center(child: Text('Liste ist leer'))
+                        : ReorderableListView.builder(
+                            padding: const EdgeInsets.only(top: 8),
+                            itemCount: currentList.items.length,
+                            onReorder: provider.reorderItems,
+                            proxyDecorator: (child, index, animation) {
+                              return Material(
+                                color: Colors.transparent,
+                                child: child,
+                              );
+                            },
+                            itemBuilder: (context, index) {
+                              final item = currentList.items[index];
+                              return _buildListTile(item, index);
+                            },
+                          ),
+                  ),
+                  _buildInputBar(),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity != null) {
-            if (details.primaryVelocity! < 0) {
-              provider.nextList();
-            } else if (details.primaryVelocity! > 0) {
-              provider.previousList();
-            }
-          }
-        },
-        child: Column(
-          children: [
-            Expanded(
-              child: currentList == null || currentList.items.isEmpty
-                  ? const Center(child: Text('Liste ist leer'))
-                  : ReorderableListView.builder(
-                      itemCount: currentList.items.length,
-                      onReorder: provider.reorderItems,
-                      proxyDecorator: (child, index, animation) {
-                        return Material(
-                          color: Colors.transparent,
-                          child: child,
-                        );
-                      },
-                      itemBuilder: (context, index) {
-                        final item = currentList.items[index];
-                        return Container(
-                          key: ValueKey(item.id),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Colors.black12,
-                                width: 0.5,
-                              ),
-                            ),
-                          ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 0,
-                            ),
-                            dense: true,
-                            title: GestureDetector(
-                              onTap: () => provider.toggleItemDone(item.id),
-                              child: Text.rich(
-                                TextSpan(
-                                  children: [
-                                    if (item.quantity.isNotEmpty)
-                                      TextSpan(text: '${item.quantity} '),
-                                    TextSpan(text: item.name),
-                                  ],
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    decoration: item.isDone
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                    decorationColor: Colors.red,
-                                    color: Colors.black,
-                                    fontWeight: item.isDone
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+    );
+  }
+
+  Widget _buildListTile(ShoppingItem item, int index) {
+    return Container(
+      key: ValueKey(item.id),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.black12, width: 0.5)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+        dense: true,
+        title: GestureDetector(
+          onTap: () => context.read<ShoppingProvider>().toggleItemDone(item.id),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                if (item.quantity.isNotEmpty)
+                  TextSpan(text: '${item.quantity} '),
+                TextSpan(text: item.name),
+              ],
+              style: TextStyle(
+                fontSize: 18,
+                decoration: item.isDone ? TextDecoration.lineThrough : null,
+                decorationColor: Colors.red,
+                color: Colors.black,
+                fontWeight: item.isDone ? FontWeight.bold : FontWeight.normal,
+              ),
             ),
-            _buildInputBar(),
-            if (_suggestions.isNotEmpty) _buildSuggestionsArea(),
-          ],
+          ),
         ),
       ),
     );
@@ -358,82 +507,94 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildInputBar() {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-        top: 8,
-        left: 8,
-        right: 8,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(
-          top: BorderSide(color: Colors.black12, width: 0.5),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+            top: 8,
+            left: 8,
+            right: 8,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            border: Border(
+              top: BorderSide(color: Colors.white.withOpacity(0.2)),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_suggestions.isNotEmpty) _buildSuggestionsArea(),
+              Row(
+                children: [
+                  // Quantity field (e.g., "2" or "1kg")
+                  Container(
+                    width: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: TextField(
+                      controller: _quantityController,
+                      decoration: const InputDecoration(
+                        hintText: 'Anzahl',
+                        hintStyle: TextStyle(color: Colors.black26),
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.text,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      child: TextField(
+                        controller: _productController,
+                        focusNode: _productFocus,
+                        onSubmitted: (_) => _addItem(),
+                        decoration: const InputDecoration(
+                          hintText: 'Artikel...',
+                          hintStyle: TextStyle(color: Colors.black26),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          isDense: true,
+                        ),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Add button
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _addItem,
+                    child: const Icon(
+                      CupertinoIcons.add_circled_solid,
+                      size: 32,
+                      color: CupertinoColors.activeBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Material(
-            color: Colors.black12,
-            borderRadius: BorderRadius.circular(4),
-            child: InkWell(
-              onTap: _addItem,
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(Icons.add, size: 20, color: Colors.black),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            width: 70,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black12),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextField(
-              controller: _quantityController,
-              decoration: const InputDecoration(
-                hintText: 'Anzahl',
-                hintStyle: TextStyle(color: Colors.black26),
-                border: InputBorder.none,
-                isDense: true,
-              ),
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              'x',
-              style: TextStyle(color: Colors.black26, fontSize: 18),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.black12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: TextField(
-                controller: _productController,
-                focusNode: _productFocus,
-                decoration: const InputDecoration(
-                  hintText: 'Produkt',
-                  hintStyle: TextStyle(color: Colors.black26),
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-                style: const TextStyle(fontSize: 16),
-                onSubmitted: (_) => _addItem(),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

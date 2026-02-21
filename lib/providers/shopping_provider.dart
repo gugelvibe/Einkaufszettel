@@ -7,7 +7,6 @@ import '../models/shopping_models.dart';
 class ShoppingProvider with ChangeNotifier {
   List<ShoppingList> _lists = [];
   int _currentListIndex = 0;
-  bool _isInputDisabled = false;
   List<String> _itemHistory = [];
   List<ShoppingItem> _lastDeletedItems = [];
   int _lastDeletedListIndex = -1;
@@ -23,7 +22,13 @@ class ShoppingProvider with ChangeNotifier {
   ShoppingList? get currentList =>
       _lists.isNotEmpty ? _lists[_currentListIndex] : null;
 
-  bool get isInputDisabled => _isInputDisabled;
+  List<String> get currentHistory {
+    if (currentList == null) return [];
+    return currentList!.useGlobalHistory
+        ? _itemHistory
+        : currentList!.localHistory;
+  }
+
   List<String> get itemHistory => _itemHistory;
   bool get canUndo => _lastDeletedItems.isNotEmpty;
 
@@ -41,7 +46,6 @@ class ShoppingProvider with ChangeNotifier {
     if (_currentListIndex >= _lists.length) {
       _currentListIndex = 0;
     }
-    _isInputDisabled = prefs.getBool('is_input_disabled') ?? false;
     _itemHistory = prefs.getStringList('item_history') ?? [];
     notifyListeners();
   }
@@ -51,7 +55,6 @@ class ShoppingProvider with ChangeNotifier {
     final String encoded = jsonEncode(_lists.map((e) => e.toJson()).toList());
     await prefs.setString('shopping_lists', encoded);
     await prefs.setInt('current_list_index', _currentListIndex);
-    await prefs.setBool('is_input_disabled', _isInputDisabled);
     await prefs.setStringList('item_history', _itemHistory);
   }
 
@@ -66,8 +69,11 @@ class ShoppingProvider with ChangeNotifier {
     if (alreadyInList) return;
 
     // In selection mode (isInputDisabled), only allow historical items
-    if (_isInputDisabled) {
-      final inHistory = _itemHistory.any(
+    if (currentList!.isInputDisabled) {
+      final history = currentList!.useGlobalHistory
+          ? _itemHistory
+          : currentList!.localHistory;
+      final inHistory = history.any(
         (h) => h.trim().toLowerCase() == normalizedName,
       );
       if (!inHistory) return;
@@ -88,13 +94,35 @@ class ShoppingProvider with ChangeNotifier {
       _itemHistory.add(name);
       _itemHistory.sort();
     }
+    if (!currentList!.localHistory.any(
+      (h) => h.toLowerCase() == normalizedName,
+    )) {
+      final updatedLocalHistory = List<String>.from(currentList!.localHistory)
+        ..add(name)
+        ..sort();
+      _lists[_currentListIndex] = currentList!.copyWith(
+        localHistory: updatedLocalHistory,
+      );
+    }
 
     _saveToPrefs();
     notifyListeners();
   }
 
   void toggleInputMode() {
-    _isInputDisabled = !_isInputDisabled;
+    if (currentList == null) return;
+    _lists[_currentListIndex] = currentList!.copyWith(
+      isInputDisabled: !currentList!.isInputDisabled,
+    );
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void toggleHistoryScope() {
+    if (currentList == null) return;
+    _lists[_currentListIndex] = currentList!.copyWith(
+      useGlobalHistory: !currentList!.useGlobalHistory,
+    );
     _saveToPrefs();
     notifyListeners();
   }
@@ -207,6 +235,20 @@ class ShoppingProvider with ChangeNotifier {
   void previousList() {
     if (_lists.isEmpty) return;
     _currentListIndex = (_currentListIndex - 1 + _lists.length) % _lists.length;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void updateListName(String name) {
+    if (currentList == null) return;
+    _lists[_currentListIndex] = currentList!.copyWith(name: name);
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void updateListColor(String? hex) {
+    if (currentList == null) return;
+    _lists[_currentListIndex] = currentList!.copyWith(colorHex: hex);
     _saveToPrefs();
     notifyListeners();
   }

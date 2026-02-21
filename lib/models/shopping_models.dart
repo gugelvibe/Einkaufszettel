@@ -55,14 +55,37 @@ class ShoppingList {
   final String id;
   final String name;
   final List<ShoppingItem> items;
+  final bool isInputDisabled;
+  final bool useGlobalHistory;
+  final List<String> localHistory;
+  final String? colorHex;
 
-  ShoppingList({required this.id, required this.name, required this.items});
+  ShoppingList({
+    required this.id,
+    required this.name,
+    required this.items,
+    this.isInputDisabled = false,
+    this.useGlobalHistory = true,
+    this.localHistory = const [],
+    this.colorHex,
+  });
 
-  ShoppingList copyWith({String? name, List<ShoppingItem>? items}) {
+  ShoppingList copyWith({
+    String? name,
+    List<ShoppingItem>? items,
+    bool? isInputDisabled,
+    bool? useGlobalHistory,
+    List<String>? localHistory,
+    String? colorHex,
+  }) {
     return ShoppingList(
       id: id,
       name: name ?? this.name,
       items: items ?? this.items,
+      isInputDisabled: isInputDisabled ?? this.isInputDisabled,
+      useGlobalHistory: useGlobalHistory ?? this.useGlobalHistory,
+      localHistory: localHistory ?? this.localHistory,
+      colorHex: colorHex ?? this.colorHex,
     );
   }
 
@@ -71,6 +94,10 @@ class ShoppingList {
       'id': id,
       'name': name,
       'items': items.map((e) => e.toJson()).toList(),
+      'isInputDisabled': isInputDisabled,
+      'useGlobalHistory': useGlobalHistory,
+      'localHistory': localHistory,
+      'colorHex': colorHex,
     };
   }
 
@@ -83,6 +110,10 @@ class ShoppingList {
               ?.map((e) => ShoppingItem.fromJson(e))
               .toList() ??
           [],
+      isInputDisabled: json['isInputDisabled'] ?? false,
+      useGlobalHistory: json['useGlobalHistory'] ?? true,
+      localHistory: (json['localHistory'] as List?)?.cast<String>() ?? [],
+      colorHex: json['colorHex'],
     );
   }
 }
