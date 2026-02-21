@@ -57,9 +57,18 @@ class _MainScreenState extends State<MainScreen> {
         _suggestions = [];
       });
     } else {
+      final currentItemNames =
+          provider.currentList?.items
+              .map((item) => item.name.toLowerCase().trim())
+              .toList() ??
+          [];
       setState(() {
         _suggestions = provider.itemHistory
-            .where((item) => item.toLowerCase().contains(text))
+            .where(
+              (item) =>
+                  item.toLowerCase().contains(text) &&
+                  !currentItemNames.contains(item.toLowerCase().trim()),
+            )
             .toList();
       });
     }
@@ -200,42 +209,26 @@ class _MainScreenState extends State<MainScreen> {
                               dense: true,
                               title: GestureDetector(
                                 onTap: () => provider.toggleItemDone(item.id),
-                                child: Row(
-                                  children: [
-                                    if (item.quantity.isNotEmpty)
-                                      Text(
-                                        '${item.quantity} ',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: item.isDone
-                                              ? Colors.red
-                                              : Colors.black,
-                                          decoration: item.isDone
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                          fontWeight: item.isDone
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        item.name,
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          decoration: item.isDone
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                          color: item.isDone
-                                              ? Colors.red
-                                              : Colors.black,
-                                          fontWeight: item.isDone
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      if (item.quantity.isNotEmpty)
+                                        TextSpan(text: '${item.quantity} '),
+                                      TextSpan(text: item.name),
+                                    ],
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      decoration: item.isDone
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                      color: item.isDone
+                                          ? Colors.red
+                                          : Colors.black,
+                                      fontWeight: item.isDone
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                               trailing: ReorderableDragStartListener(
