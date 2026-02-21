@@ -221,9 +221,8 @@ class _MainScreenState extends State<MainScreen> {
                                       decoration: item.isDone
                                           ? TextDecoration.lineThrough
                                           : null,
-                                      color: item.isDone
-                                          ? Colors.red
-                                          : Colors.black,
+                                      decorationColor: Colors.red,
+                                      color: Colors.black,
                                       fontWeight: item.isDone
                                           ? FontWeight.bold
                                           : FontWeight.normal,
