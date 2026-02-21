@@ -42,20 +42,6 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _quantityController = TextEditingController();
   final FocusNode _productFocus = FocusNode();
   List<String> _suggestions = [];
-  final List<String> _allSuggestions = [
-    'Abzieher',
-    'Äpfel',
-    'Avocado',
-    'Bananen',
-    'Brot',
-    'Butter',
-    'Eier',
-    'Milch',
-    'Nudeln',
-    'Reis',
-    'Tomaten',
-    'Zwiebeln',
-  ];
 
   @override
   void initState() {
@@ -65,14 +51,15 @@ class _MainScreenState extends State<MainScreen> {
 
   void _onProductChanged() {
     final text = _productController.text.toLowerCase();
+    final provider = context.read<ShoppingProvider>();
     if (text.isEmpty) {
       setState(() {
         _suggestions = [];
       });
     } else {
       setState(() {
-        _suggestions = _allSuggestions
-            .where((item) => item.toLowerCase().startsWith(text))
+        _suggestions = provider.itemHistory
+            .where((item) => item.toLowerCase().contains(text))
             .toList();
       });
     }
@@ -93,6 +80,7 @@ class _MainScreenState extends State<MainScreen> {
       context.read<ShoppingProvider>().addItem(name, quantity);
       _productController.clear();
       _quantityController.clear();
+      _productFocus.requestFocus(); // Keep focus
     }
   }
 
@@ -118,9 +106,14 @@ class _MainScreenState extends State<MainScreen> {
           ),
           CupertinoActionSheetAction(
             onPressed: () {
+              context.read<ShoppingProvider>().toggleInputMode();
               Navigator.pop(context);
             },
-            child: const Text('Einstellungen'),
+            child: Text(
+              context.read<ShoppingProvider>().isInputDisabled
+                  ? 'Eingabemodus aktivieren'
+                  : 'Nur Anzeige-Modus',
+            ),
           ),
           CupertinoActionSheetAction(
             onPressed: () {
@@ -175,6 +168,7 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           Column(
             children: [
+              if (!provider.isInputDisabled) _buildInputBar(),
               Expanded(
                 child: currentList == null || currentList.items.isEmpty
                     ? const Center(child: Text('Liste ist leer'))
@@ -257,10 +251,10 @@ class _MainScreenState extends State<MainScreen> {
                         },
                       ),
               ),
-              _buildInputBar(),
             ],
           ),
-          if (_suggestions.isNotEmpty) _buildSuggestionsOverlay(),
+          if (_suggestions.isNotEmpty && !provider.isInputDisabled)
+            _buildSuggestionsOverlay(),
         ],
       ),
     );
@@ -268,7 +262,7 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildSuggestionsOverlay() {
     return Positioned(
-      bottom: MediaQuery.of(context).viewInsets.bottom + 50,
+      top: 60, // Positioned below the input bar (which is at the top)
       left: 8,
       right: 8,
       child: Material(
@@ -290,6 +284,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   _productController.text = suggestion;
                   _addItem();
+                  _productFocus.requestFocus(); // Ensure focus remains
                 },
               );
             },

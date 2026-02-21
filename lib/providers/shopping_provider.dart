@@ -7,6 +7,8 @@ import '../models/shopping_models.dart';
 class ShoppingProvider with ChangeNotifier {
   List<ShoppingList> _lists = [];
   int _currentListIndex = 0;
+  bool _isInputDisabled = false;
+  List<String> _itemHistory = [];
   final _uuid = const Uuid();
 
   late Future<void> initialized;
@@ -18,6 +20,9 @@ class ShoppingProvider with ChangeNotifier {
   List<ShoppingList> get lists => _lists;
   ShoppingList? get currentList =>
       _lists.isNotEmpty ? _lists[_currentListIndex] : null;
+
+  bool get isInputDisabled => _isInputDisabled;
+  List<String> get itemHistory => _itemHistory;
 
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,6 +38,8 @@ class ShoppingProvider with ChangeNotifier {
     if (_currentListIndex >= _lists.length) {
       _currentListIndex = 0;
     }
+    _isInputDisabled = prefs.getBool('is_input_disabled') ?? false;
+    _itemHistory = prefs.getStringList('item_history') ?? [];
     notifyListeners();
   }
 
@@ -41,10 +48,20 @@ class ShoppingProvider with ChangeNotifier {
     final String encoded = jsonEncode(_lists.map((e) => e.toJson()).toList());
     await prefs.setString('shopping_lists', encoded);
     await prefs.setInt('current_list_index', _currentListIndex);
+    await prefs.setBool('is_input_disabled', _isInputDisabled);
+    await prefs.setStringList('item_history', _itemHistory);
   }
 
   void addItem(String name, String quantity) {
     if (currentList == null) return;
+
+    // Check for duplicates
+    final normalizedName = name.trim().toLowerCase();
+    final alreadyInList = currentList!.items.any(
+      (item) => item.name.trim().toLowerCase() == normalizedName,
+    );
+    if (alreadyInList) return;
+
     final newItem = ShoppingItem(
       id: _uuid.v4(),
       name: name,
@@ -54,6 +71,19 @@ class ShoppingProvider with ChangeNotifier {
     final updatedItems = List<ShoppingItem>.from(currentList!.items)
       ..add(newItem);
     _lists[_currentListIndex] = currentList!.copyWith(items: updatedItems);
+
+    // Add to history if not exists
+    if (!_itemHistory.contains(name)) {
+      _itemHistory.add(name);
+      _itemHistory.sort();
+    }
+
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void toggleInputMode() {
+    _isInputDisabled = !_isInputDisabled;
     _saveToPrefs();
     notifyListeners();
   }
