@@ -85,19 +85,93 @@ class _MainScreenState extends State<MainScreen> {
   void _addItem() {
     final name = _productController.text.trim();
     final quantity = _quantityController.text.trim();
+    final provider = context.read<ShoppingProvider>();
+
     if (name.isNotEmpty) {
-      context.read<ShoppingProvider>().addItem(name, quantity);
+      if (provider.isInputDisabled) {
+        final inHistory = provider.itemHistory.any(
+          (h) => h.trim().toLowerCase() == name.toLowerCase(),
+        );
+        if (!inHistory) {
+          // Show feedback if needed, but for now just clear and return
+          _productController.clear();
+          return;
+        }
+      }
+      provider.addItem(name, quantity);
       _productController.clear();
       _quantityController.clear();
       _productFocus.requestFocus(); // Keep focus
     }
   }
 
+  void _showNewListDialog() {
+    final TextEditingController nameController = TextEditingController();
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Neue Einkaufsliste'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: CupertinoTextField(
+            controller: nameController,
+            placeholder: 'Name der Liste',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                context.read<ShoppingProvider>().addNewList(name);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Erstellen'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showActionSheet(BuildContext context) {
+    final provider = context.read<ShoppingProvider>();
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => CupertinoActionSheet(
+        title: const Text('Einstellungen'),
         actions: <CupertinoActionSheetAction>[
+          ...provider.lists.asMap().entries.map((entry) {
+            final index = entry.key;
+            final list = entry.value;
+            final isCurrent = list.id == provider.currentList?.id;
+            return CupertinoActionSheetAction(
+              onPressed: () {
+                provider.switchList(index);
+                Navigator.pop(context);
+              },
+              child: Text(
+                list.name,
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  color: isCurrent ? CupertinoColors.activeBlue : null,
+                ),
+              ),
+            );
+          }),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _showNewListDialog();
+            },
+            child: const Text('Zusätzliche Einkaufsliste'),
+          ),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
             onPressed: () {
@@ -105,13 +179,6 @@ class _MainScreenState extends State<MainScreen> {
               Navigator.pop(context);
             },
             child: const Text('Einkaufsliste leeren'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              // Add new list functionality could go here
-              Navigator.pop(context);
-            },
-            child: const Text('Zusätzliche Einkaufsliste'),
           ),
           CupertinoActionSheetAction(
             onPressed: () {
@@ -152,96 +219,117 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.more_horiz),
-          onPressed: () => _showActionSheet(context),
+          icon: Icon(provider.canUndo ? Icons.undo : Icons.check),
+          onPressed: () {
+            if (provider.canUndo) {
+              provider.undoDeletion();
+            } else {
+              provider.removeCompletedItems();
+            }
+          },
         ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/app_icon.png', height: 28),
-            const SizedBox(width: 8),
-            Text(currentList?.name ?? 'Einkaufszettel'),
-          ],
+        title: GestureDetector(
+          onTap: Theme.of(context).platform == TargetPlatform.macOS
+              ? () => _showActionSheet(context)
+              : null,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/app_icon.png', height: 28),
+              const SizedBox(width: 8),
+              Text(
+                currentList?.name ?? 'Einkaufszettel',
+                style: TextStyle(
+                  color: Theme.of(context).platform == TargetPlatform.macOS
+                      ? CupertinoColors.activeBlue
+                      : null,
+                ),
+              ),
+            ],
+          ),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.check),
-            onPressed: () {
-              // Finish shopping or similar action
-            },
+            icon: const Icon(Icons.more_horiz),
+            onPressed: () => _showActionSheet(context),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Expanded(
-                child: currentList == null || currentList.items.isEmpty
-                    ? const Center(child: Text('Liste ist leer'))
-                    : ReorderableListView.builder(
-                        itemCount: currentList.items.length,
-                        onReorder: provider.reorderItems,
-                        proxyDecorator: (child, index, animation) {
-                          return Material(
-                            color: Colors.transparent,
-                            child: child,
-                          );
-                        },
-                        itemBuilder: (context, index) {
-                          final item = currentList.items[index];
-                          return Container(
-                            key: ValueKey(item.id),
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.black12,
-                                  width: 0.5,
-                                ),
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < 0) {
+              provider.nextList();
+            } else if (details.primaryVelocity! > 0) {
+              provider.previousList();
+            }
+          }
+        },
+        child: Column(
+          children: [
+            Expanded(
+              child: currentList == null || currentList.items.isEmpty
+                  ? const Center(child: Text('Liste ist leer'))
+                  : ReorderableListView.builder(
+                      itemCount: currentList.items.length,
+                      onReorder: provider.reorderItems,
+                      proxyDecorator: (child, index, animation) {
+                        return Material(
+                          color: Colors.transparent,
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final item = currentList.items[index];
+                        return Container(
+                          key: ValueKey(item.id),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.black12,
+                                width: 0.5,
                               ),
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 0,
-                              ),
-                              dense: true,
-                              title: GestureDetector(
-                                onTap: () => provider.toggleItemDone(item.id),
-                                child: Text.rich(
-                                  TextSpan(
-                                    children: [
-                                      if (item.quantity.isNotEmpty)
-                                        TextSpan(text: '${item.quantity} '),
-                                      TextSpan(text: item.name),
-                                    ],
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      decoration: item.isDone
-                                          ? TextDecoration.lineThrough
-                                          : null,
-                                      decorationColor: Colors.red,
-                                      color: Colors.black,
-                                      fontWeight: item.isDone
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                    ),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 0,
+                            ),
+                            dense: true,
+                            title: GestureDetector(
+                              onTap: () => provider.toggleItemDone(item.id),
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    if (item.quantity.isNotEmpty)
+                                      TextSpan(text: '${item.quantity} '),
+                                    TextSpan(text: item.name),
+                                  ],
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    decoration: item.isDone
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    decorationColor: Colors.red,
+                                    color: Colors.black,
+                                    fontWeight: item.isDone
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
-              ),
-              if (!provider.isInputDisabled) ...[
-                _buildInputBar(),
-                if (_suggestions.isNotEmpty) _buildSuggestionsArea(),
-              ],
-            ],
-          ),
-        ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            _buildInputBar(),
+            if (_suggestions.isNotEmpty) _buildSuggestionsArea(),
+          ],
+        ),
       ),
     );
   }

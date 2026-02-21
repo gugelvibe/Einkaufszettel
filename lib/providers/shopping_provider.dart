@@ -9,6 +9,8 @@ class ShoppingProvider with ChangeNotifier {
   int _currentListIndex = 0;
   bool _isInputDisabled = false;
   List<String> _itemHistory = [];
+  List<ShoppingItem> _lastDeletedItems = [];
+  int _lastDeletedListIndex = -1;
   final _uuid = const Uuid();
 
   late Future<void> initialized;
@@ -23,6 +25,7 @@ class ShoppingProvider with ChangeNotifier {
 
   bool get isInputDisabled => _isInputDisabled;
   List<String> get itemHistory => _itemHistory;
+  bool get canUndo => _lastDeletedItems.isNotEmpty;
 
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -61,6 +64,14 @@ class ShoppingProvider with ChangeNotifier {
       (item) => item.name.trim().toLowerCase() == normalizedName,
     );
     if (alreadyInList) return;
+
+    // In selection mode (isInputDisabled), only allow historical items
+    if (_isInputDisabled) {
+      final inHistory = _itemHistory.any(
+        (h) => h.trim().toLowerCase() == normalizedName,
+      );
+      if (!inHistory) return;
+    }
 
     final newItem = ShoppingItem(
       id: _uuid.v4(),
@@ -131,6 +142,45 @@ class ShoppingProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void removeCompletedItems() {
+    if (currentList == null) return;
+
+    final completedItems = currentList!.items
+        .where((item) => item.isDone)
+        .toList();
+    if (completedItems.isEmpty) return;
+
+    _lastDeletedItems = List<ShoppingItem>.from(completedItems);
+    _lastDeletedListIndex = _currentListIndex;
+
+    final remainingItems = currentList!.items
+        .where((item) => !item.isDone)
+        .toList();
+    _lists[_currentListIndex] = currentList!.copyWith(items: remainingItems);
+
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void undoDeletion() {
+    if (_lastDeletedItems.isEmpty || _lastDeletedListIndex == -1) return;
+    if (_lastDeletedListIndex >= _lists.length) return;
+
+    final targetList = _lists[_lastDeletedListIndex];
+    final updatedItems = List<ShoppingItem>.from(targetList.items)
+      ..addAll(_lastDeletedItems);
+
+    // Sort items by position to maintain order
+    updatedItems.sort((a, b) => a.position.compareTo(b.position));
+
+    _lists[_lastDeletedListIndex] = targetList.copyWith(items: updatedItems);
+    _lastDeletedItems = [];
+    _lastDeletedListIndex = -1;
+
+    _saveToPrefs();
+    notifyListeners();
+  }
+
   void addNewList(String name) {
     final newList = ShoppingList(id: _uuid.v4(), name: name, items: []);
     _lists.add(newList);
@@ -145,5 +195,19 @@ class ShoppingProvider with ChangeNotifier {
       _saveToPrefs();
       notifyListeners();
     }
+  }
+
+  void nextList() {
+    if (_lists.isEmpty) return;
+    _currentListIndex = (_currentListIndex + 1) % _lists.length;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void previousList() {
+    if (_lists.isEmpty) return;
+    _currentListIndex = (_currentListIndex - 1 + _lists.length) % _lists.length;
+    _saveToPrefs();
+    notifyListeners();
   }
 }
