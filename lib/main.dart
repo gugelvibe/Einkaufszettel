@@ -231,13 +231,6 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                 ),
                               ),
-                              trailing: ReorderableDragStartListener(
-                                index: index,
-                                child: const Icon(
-                                  Icons.menu,
-                                  color: Colors.black26,
-                                ),
-                              ),
                             ),
                           );
                         },
