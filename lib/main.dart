@@ -168,7 +168,6 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           Column(
             children: [
-              if (!provider.isInputDisabled) _buildInputBar(),
               Expanded(
                 child: currentList == null || currentList.items.isEmpty
                     ? const Center(child: Text('Liste ist leer'))
@@ -251,45 +250,36 @@ class _MainScreenState extends State<MainScreen> {
                         },
                       ),
               ),
+              if (!provider.isInputDisabled) ...[
+                _buildInputBar(),
+                if (_suggestions.isNotEmpty) _buildSuggestionsArea(),
+              ],
             ],
           ),
-          if (_suggestions.isNotEmpty && !provider.isInputDisabled)
-            _buildSuggestionsOverlay(),
         ],
       ),
     );
   }
 
-  Widget _buildSuggestionsOverlay() {
-    return Positioned(
-      top: 60, // Positioned below the input bar (which is at the top)
-      left: 8,
-      right: 8,
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          constraints: const BoxConstraints(maxHeight: 200),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _suggestions.length,
-            itemBuilder: (context, index) {
-              final suggestion = _suggestions[index];
-              return ListTile(
-                title: Text(suggestion),
-                onTap: () {
-                  _productController.text = suggestion;
-                  _addItem();
-                  _productFocus.requestFocus(); // Ensure focus remains
-                },
-              );
+  Widget _buildSuggestionsArea() {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 200),
+      color: Colors.white,
+      child: ListView.builder(
+        shrinkWrap: true,
+        itemCount: _suggestions.length,
+        itemBuilder: (context, index) {
+          final suggestion = _suggestions[index];
+          return ListTile(
+            dense: true,
+            title: Text(suggestion),
+            onTap: () {
+              _productController.text = suggestion;
+              _addItem();
+              _productFocus.requestFocus();
             },
-          ),
-        ),
+          );
+        },
       ),
     );
   }
