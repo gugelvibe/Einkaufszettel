@@ -121,7 +121,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Text(
               context.read<ShoppingProvider>().isInputDisabled
                   ? 'Eingabemodus aktivieren'
-                  : 'Nur Anzeige-Modus',
+                  : 'Auswahlmodus',
             ),
           ),
           CupertinoActionSheetAction(
