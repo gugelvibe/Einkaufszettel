@@ -1,9 +1,12 @@
 import 'dart:ui';
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/shopping_provider.dart';
 import 'models/shopping_models.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
 void main() {
   runApp(
@@ -39,6 +42,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  DateTime _lastShake = DateTime.now();
   final TextEditingController _productController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final FocusNode _productFocus = FocusNode();
@@ -48,6 +53,24 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _productController.addListener(_onProductChanged);
+    // Start listening to accelerometer events for shake detection
+    final provider = context.read<ShoppingProvider>();
+    _accelerometerSubscription = accelerometerEventStream().listen((
+      AccelerometerEvent event,
+    ) {
+      final double magnitude = sqrt(
+        event.x * event.x + event.y * event.y + event.z * event.z,
+      );
+      const double shakeThreshold = 15.0; // Adjust as needed
+      if (magnitude > shakeThreshold) {
+        final now = DateTime.now();
+        if (now.difference(_lastShake).inMilliseconds > 500) {
+          _lastShake = now;
+          // Trigger removal of completed items
+          provider.removeCompletedItems();
+        }
+      }
+    });
   }
 
   void _onProductChanged() {
@@ -80,6 +103,7 @@ class _MainScreenState extends State<MainScreen> {
     _productController.dispose();
     _quantityController.dispose();
     _productFocus.dispose();
+    _accelerometerSubscription?.cancel();
     super.dispose();
   }
 
@@ -316,7 +340,7 @@ class _MainScreenState extends State<MainScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withAlpha(26),
               elevation: 0,
               leading: IconButton(
                 icon: Image.asset('assets/app_icon.png', height: 28),
@@ -366,10 +390,7 @@ class _MainScreenState extends State<MainScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [
-                    Colors.blue.withOpacity(0.3),
-                    Colors.blue.withOpacity(0),
-                  ],
+                  colors: [Colors.blue.withAlpha(77), Colors.blue.withAlpha(0)],
                 ),
               ),
             ),
@@ -383,10 +404,7 @@ class _MainScreenState extends State<MainScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [
-                    Colors.pink.withOpacity(0.2),
-                    Colors.pink.withOpacity(0),
-                  ],
+                  colors: [Colors.pink.withAlpha(51), Colors.pink.withAlpha(0)],
                 ),
               ),
             ),
@@ -401,8 +419,8 @@ class _MainScreenState extends State<MainScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.yellow.withOpacity(0.2),
-                    Colors.yellow.withOpacity(0),
+                    Colors.yellow.withAlpha(51),
+                    Colors.yellow.withAlpha(0),
                   ],
                 ),
               ),
@@ -518,10 +536,8 @@ class _MainScreenState extends State<MainScreen> {
             right: 8,
           ),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.2)),
-            ),
+            color: Colors.white.withAlpha(26),
+            border: Border(top: BorderSide(color: Colors.white.withAlpha(51))),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -533,9 +549,9 @@ class _MainScreenState extends State<MainScreen> {
                   Container(
                     width: 60,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withAlpha(51),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      border: Border.all(color: Colors.white.withAlpha(77)),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: TextField(
@@ -555,11 +571,9 @@ class _MainScreenState extends State<MainScreen> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withAlpha(51),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                        ),
+                        border: Border.all(color: Colors.white.withAlpha(77)),
                       ),
                       child: TextField(
                         controller: _productController,

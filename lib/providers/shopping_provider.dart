@@ -30,8 +30,8 @@ class ShoppingProvider with ChangeNotifier {
   }
 
   List<String> get itemHistory => _itemHistory;
-  bool get canUndo => _lastDeletedItems.isNotEmpty;
-
+  bool get canUndo => _undoAvailable && _lastDeletedItems.isNotEmpty;
+  bool _undoAvailable = false;
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final String? listsJson = prefs.getString('shopping_lists');
@@ -105,6 +105,7 @@ class ShoppingProvider with ChangeNotifier {
       );
     }
 
+    _undoAvailable = false;
     _saveToPrefs();
     notifyListeners();
   }
@@ -114,6 +115,7 @@ class ShoppingProvider with ChangeNotifier {
     _lists[_currentListIndex] = currentList!.copyWith(
       isInputDisabled: !currentList!.isInputDisabled,
     );
+    _undoAvailable = false;
     _saveToPrefs();
     notifyListeners();
   }
@@ -123,6 +125,7 @@ class ShoppingProvider with ChangeNotifier {
     _lists[_currentListIndex] = currentList!.copyWith(
       useGlobalHistory: !currentList!.useGlobalHistory,
     );
+    _undoAvailable = false;
     _saveToPrefs();
     notifyListeners();
   }
@@ -136,6 +139,7 @@ class ShoppingProvider with ChangeNotifier {
       return item;
     }).toList();
     _lists[_currentListIndex] = currentList!.copyWith(items: updatedItems);
+    _undoAvailable = false;
     _saveToPrefs();
     notifyListeners();
   }
